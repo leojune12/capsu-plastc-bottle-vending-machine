@@ -1,4 +1,8 @@
+#include <EEPROM.h>
+#include <LiquidCrystal_I2C.h>
 #include <Servo.h>
+
+LiquidCrystal_I2C lcd(0x27,16,2);
 
 Servo myservo;
 
@@ -17,6 +21,8 @@ float speed_Of_Sound;       // Calculated speed of sound based on air temp
 float distance_Per_uSec;    // Distance sound travels in one microsecond
 float max_distance = 150;   // In centimeter
 
+int bottle_count = 0;
+
 void setup() {
     Serial.begin(9600);
     
@@ -32,9 +38,21 @@ void setup() {
     speed_Of_Sound = 331.1 +(0.606 * temp_In_C);  
     // Calculate the distance that sound travels in one microsecond in centimeters
     distance_Per_uSec = speed_Of_Sound / 10000.0;
+
+    lcd.init();
+    lcd.backlight();
+
+    // EEPROM.put(0, 0);
+    EEPROM.get(0, bottle_count);
 }
 
 void loop() {
+  // Display bottle count 
+  lcd.setCursor(0,1);
+  lcd.print("Bottle count: ");
+  lcd.setCursor(14,1);
+  lcd.print(String(bottle_count) + "  ");
+  
   check_cylinder_for_bottle();
 }
 
@@ -48,26 +66,48 @@ void check_cylinder_for_bottle() {
     Serial.println(metal_sensor_reading);
     
     if (cylinder_ultrasonic_distance < 10) {
+
+        lcd.setCursor(0,0);
+        lcd.print("Analyzing object");
+
+        delay(1000);
     
         // 0 = Detected, 1 = No Detected
         if (plastic_sensor_reading == 0 & metal_sensor_reading == 1) {
             // Plastic reading
-            delay(1000);
+            lcd.setCursor(0,0);
+            lcd.print("Plastic found   ");
+            lcd.setCursor(0,1);
+            lcd.print("Disposing       ");
             
             do {
                 turn_servo_to_plastic();
                 delay(1000);
                 cylinder_ultrasonic_distance = read_sensor("in cylinder", TRIG_PIN_1, ECHO_PIN_1);
             } while(cylinder_ultrasonic_distance < 10);
+
+            bottle_count = bottle_count + 1;
+            EEPROM.put(0, bottle_count);
         } else {
             // Non-plastic reading        
-            delay(1000);
+            lcd.setCursor(0,0);
+            lcd.print("Nonplastic found");
+            lcd.setCursor(0,1);
+            lcd.print("Disposing       ");
             
             do {
                 turn_servo_to_non_plastic();
                 delay(1000);
                 cylinder_ultrasonic_distance = read_sensor("in cylinder", TRIG_PIN_1, ECHO_PIN_1);
             } while(cylinder_ultrasonic_distance < 10);
+        }
+    } else {
+        if (bottle_count > 2) {
+            lcd.setCursor(0,0);
+            lcd.print("Select a snack  "); 
+        } else {
+            lcd.setCursor(0,0);
+            lcd.print("Insert a bottle ");
         }
     }
 }
